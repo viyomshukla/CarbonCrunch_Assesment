@@ -38,15 +38,33 @@ const OUTCOME_COPY = {
   failed: 'Rolled back. Nothing was written, so resending is safe.',
 };
 
-export default function PipelineTrace({ result }) {
+// A processed event stops nowhere — it clears the last stage — so the colour
+// it carries is the one for a completed run.
+const STOP_STAGE = {
+  processed: 'commit',
+  duplicate: 'fingerprint',
+  rejected: 'validate',
+  failed: 'commit',
+};
+
+export default function PipelineTrace({ result, live }) {
   const status = result?.status;
   const states = stageStates(status);
+  const httpStatus = result?.httpStatus;
 
   return (
-    <section className="trace" aria-live="polite">
+    <section
+      className={`trace ${status ? `trace--${status}` : ''} ${live ? 'trace--live' : ''}`}
+      aria-live="polite"
+    >
       <div className="trace__header">
         <h2 className="panel__title">Pipeline</h2>
-        {status && <span className={`tag tag--${status}`}>{status}</span>}
+        {status && (
+          <span className={`tag tag--${status}`}>
+            {status}
+            {httpStatus ? ` · ${httpStatus}` : ''}
+          </span>
+        )}
       </div>
 
       <ol className="trace__track">
@@ -54,7 +72,9 @@ export default function PipelineTrace({ result }) {
           <li key={stage.key} className={`stage stage--${states[stage.key]}`}>
             <span className="stage__dot" aria-hidden="true" />
             <span className="stage__label">{stage.label}</span>
-            <span className="stage__note">{stage.note}</span>
+            <span className="stage__note">
+              {status && STOP_STAGE[status] === stage.key ? 'ended here' : stage.note}
+            </span>
           </li>
         ))}
       </ol>
@@ -65,7 +85,9 @@ export default function PipelineTrace({ result }) {
 
       {status && (
         <div className="trace__outcome">
-          <p className="trace__verdict">{OUTCOME_COPY[status]}</p>
+          <p className="trace__verdict">
+            <span>{OUTCOME_COPY[status]}</span>
+          </p>
 
           {result.errors?.length > 0 && (
             <ul className="trace__errors">
@@ -97,7 +119,13 @@ export default function PipelineTrace({ result }) {
 
           {result.unmapped?.length > 0 && (
             <p className="trace__unmapped">
-              Unmapped fields kept in the raw record: {result.unmapped.join(', ')}
+              Kept in the raw record but not mapped:{' '}
+              {result.unmapped.map((field, i) => (
+                <span key={field}>
+                  {i > 0 && ', '}
+                  <code>{field}</code>
+                </span>
+              ))}
             </p>
           )}
         </div>

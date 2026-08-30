@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 /**
  * Presets exist so a reviewer can reproduce every behaviour in the system
@@ -34,6 +34,7 @@ const PRESETS = [
     id: 'bad',
     label: 'malformed',
     hint: 'unusable amount, no timestamp',
+    bad: true,
     body: { source: 'client_D', payload: { metric: 'value', amount: 'abc' } },
   },
 ];
@@ -42,21 +43,44 @@ const INITIAL = JSON.stringify(PRESETS[0].body, null, 2);
 
 export default function EventForm({ onSubmit, busy }) {
   const [text, setText] = useState(INITIAL);
+  const [activePreset, setActivePreset] = useState(PRESETS[0].id);
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [localError, setLocalError] = useState(null);
 
+  // Parsed on every keystroke purely to light the validity flag. The server
+  // validates independently and does not trust any of this.
+  const parsed = useMemo(() => {
+    try {
+      return { ok: true, value: JSON.parse(text) };
+    } catch (err) {
+      return { ok: false, message: err.message };
+    }
+  }, [text]);
+
   function loadPreset(preset) {
     setText(JSON.stringify(preset.body, null, 2));
+    setActivePreset(preset.id);
+    setLocalError(null);
+  }
+
+  function handleChange(value) {
+    setText(value);
+    setActivePreset(null);
+    if (localError) setLocalError(null);
+  }
+
+  function format() {
+    if (!parsed.ok) {
+      setLocalError('Cannot reformat: the body is not valid JSON yet.');
+      return;
+    }
+    setText(JSON.stringify(parsed.value, null, 2));
     setLocalError(null);
   }
 
   function handleSubmit() {
-    // Parsed here purely to catch typos before a round trip. The server
-    // validates independently and does not trust this.
-    try {
-      JSON.parse(text);
-    } catch {
-      setLocalError('That is not valid JSON. Check for a missing comma or quote.');
+    if (!parsed.ok) {
+      setLocalError(`That is not valid JSON — ${parsed.message}`);
       return;
     }
     setLocalError(null);
@@ -66,8 +90,10 @@ export default function EventForm({ onSubmit, busy }) {
   return (
     <section className="panel">
       <div className="panel__head">
-        <h2 className="panel__title">Submit raw event</h2>
-        <p className="panel__sub">Any shape. The server decides what it can use.</p>
+        <div>
+          <h2 className="panel__title">Submit raw event</h2>
+          <p className="panel__sub">Any shape. The server decides what it can use.</p>
+        </div>
       </div>
 
       <div className="presets">
@@ -75,7 +101,9 @@ export default function EventForm({ onSubmit, busy }) {
           <button
             key={preset.id}
             type="button"
-            className="preset"
+            className={`preset ${preset.bad ? 'preset--bad' : ''} ${
+              activePreset === preset.id ? 'preset--on' : ''
+            }`}
             onClick={() => loadPreset(preset)}
           >
             <span className="preset__label">{preset.label}</span>
@@ -86,18 +114,26 @@ export default function EventForm({ onSubmit, busy }) {
 
       <label className="field">
         <span className="field__label">Request body</span>
-        <textarea
-          className="editor"
-          value={text}
-          spellCheck="false"
-          rows={12}
-          onChange={(e) => setText(e.target.value)}
-        />
+        <span className="editorwrap">
+          <textarea
+            className={`editor ${parsed.ok ? '' : 'editor--bad'}`}
+            value={text}
+            spellCheck="false"
+            rows={12}
+            onChange={(e) => handleChange(e.target.value)}
+          />
+          <span
+            className={`editorwrap__flag ${parsed.ok ? '' : 'editorwrap__flag--bad'}`}
+            aria-hidden="true"
+          >
+            {parsed.ok ? 'valid json' : 'invalid json'}
+          </span>
+        </span>
       </label>
 
       {localError && <p className="inline-error">{localError}</p>}
 
-      <label className="switch">
+      <label className={`switch ${simulateFailure ? 'switch--on' : ''}`}>
         <input
           type="checkbox"
           checked={simulateFailure}
@@ -114,6 +150,7 @@ export default function EventForm({ onSubmit, busy }) {
 
       <div className="actions">
         <button type="button" className="btn btn--primary" onClick={handleSubmit} disabled={busy}>
+          {busy && <span className="spinner" aria-hidden="true" />}
           {busy ? 'Sending…' : 'Send event'}
         </button>
         <button
@@ -124,6 +161,9 @@ export default function EventForm({ onSubmit, busy }) {
           title="Sends the exact same body again, the way a retrying client would"
         >
           Send again
+        </button>
+        <button type="button" className="btn btn--quiet" onClick={format} disabled={busy}>
+          Reformat
         </button>
       </div>
 
