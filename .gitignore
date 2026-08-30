@@ -2,3 +2,9 @@ node_modules/
 data.sqlite
 data.sqlite-wal
 data.sqlite-shm
+
+# Build output and deploy tooling
+dist/
+.vercel
+.env
+.env.local

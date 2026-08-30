@@ -1,14 +1,18 @@
-/**
- * Every call to the backend goes through here.
- *
- * Note the deliberate absence of error throwing on non-2xx responses. The
- * backend uses status codes to describe OUTCOMES, not just faults: 422 means
- * "rejected", 500 means "the write failed, retry is safe". Both are results
- * the UI needs to display, not exceptions to swallow. So we return the parsed
- * body either way and let the caller decide.
- */
 
-const BASE = '/api';
+
+/**
+ * Where the API lives.
+ *
+ * Unset (local dev): requests go to /api on the same origin and Vite's proxy
+ * forwards them to localhost:4000, so there is no CORS negotiation and no
+ * hardcoded port in this file.
+ *
+ * Set (deployed): VITE_API_URL is the backend ORIGIN only, e.g.
+ * https://carbon-crunch-api.onrender.com — the /api prefix is added here so
+ * the variable cannot be got subtly wrong by including or omitting it.
+ */
+const ORIGIN = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+const BASE = `${ORIGIN}/api`;
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, options);

@@ -1,0 +1,37 @@
+# Render Blueprint.
+#
+# In the Render dashboard: New -> Blueprint -> pick this repository. Render
+# reads this file and creates the service below; there is nothing to fill in
+# by hand.
+#
+# NOTE ON DURABILITY: the free plan has an ephemeral filesystem, so
+# data.sqlite is wiped on every deploy and on every wake from the 15-minute
+# idle spin-down. That is acceptable for a demo — the presets refill it in
+# seconds — but it is not storage. To make it durable, move to a paid
+# instance and uncomment the disk block plus the DB_PATH variable below;
+# db.js already reads DB_PATH and falls back to the local file.
+
+services:
+  - type: web
+    name: carbon-crunch-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npm start
+    # Render polls this to decide the service is live. The route is free of
+    # database work on purpose, so a slow query never reads as a dead service.
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+
+    # --- Durable storage (paid instances only) ---
+    # disk:
+    #   name: sqlite-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # and add to envVars:
+    #   - key: DB_PATH
+    #     value: /var/data/data.sqlite
